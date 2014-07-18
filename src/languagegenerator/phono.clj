@@ -2,6 +2,8 @@
   (:require [clojure.test :refer [with-test is]])
   (:require [languagegenerator.utils :refer [get-from map-to-ranges]]))
 
+(set! *assert* true)
+
 (def base-vowels [\a \i \u])
 
 (def extra-vowels [\e \o \y \ə \ɪ \ɒ \ɑ \œ \ʏ \ɯ \ʉ \ɨ \ɵ \ɛ \ʊ \ɔ \æ \ɐ
@@ -79,8 +81,29 @@
         (get-inventory base-consonants extra-consonants 2)))
   )
 
-(defn- gen-phonemes [vowel-adjustment consonant-adjustment
-                     vowel-likelihoods consonant-likelihoods]
+(defn- gen-phonemes
+  "Generate vowel and consonant inventories. There's no real need to call this
+  directly; get-phonemes is a wrapper around this function to handle multiple
+  arities.
+  :param vowel-adjustment: 'weight' to change random selection of vowels
+  :type vowel-adjustment: integer
+  :param consonant-adjustment: 'weight' to change random selection of consonants
+  :type consonant-adjustment: integer
+  :param vowel-likelihoods: mapping of vowel inventory sizes to likelihoods,
+    used to modify the default mapping
+  :type vowel-likelihoods: map
+  :param consonant-likelihoods: mapping of consonant inventory sizes to
+    likelihoods, used to modify the default mapping
+  :return: map {:v [vector-of-vowels] :c [vector-of-vowels]}
+  :NB: likelihood maps are merged with the respective default map; pre-existing
+    count likelihoods must be explicitly clobbered, and the likelihoods resulting
+    from the merger must add up to 100"
+  [vowel-adjustment vowel-likelihoods consonant-adjustment consonant-likelihoods]
+  {:pre [(let [vs (vals vowel-likelihoods)]
+          (or (nil? vs) (<= 100 (apply + vs))))
+         (let [vs (vals consonant-likelihoods)]
+          (or (nil? vs) (<= 100 (apply + vs))))]
+   :post [(= 100 (count (:v %))) (= 100 (count (:c %)))]}
     {:v (get-inventory base-vowels extra-vowels
           (get-from vowel-adjustment (map-to-ranges
             (merge vowel-map vowel-likelihoods))))
@@ -88,32 +111,39 @@
           (get-from consonant-adjustment (map-to-ranges
             (merge vowel-map vowel-likelihoods))))}))
 
-(defn get-phonemes
-  "Get vowel and consonant inventories. Mappings between counts and likelihoods
-  are translated into vectors containing likelihood number of counts, from which
-  one count is randomly selected. This selection occurs separately for vowels
-  and consonants, and can be weighted by supplying :vowel-adjustment or
-  :consonant-adjustment keyword arguments. Maps passed in with the
-  :vowel-likelihoods or :consonant-likelihoods keyword arguments will be used
-  to update the pre-definied mappings. Note that this means you have to
-  explicitly 'clobber' any counts you want to change."
-  ([] (gen-phonemes 0 0 {} {}))
+(defn- get-phonemes
+  "Wrapper around gen-phonemes to handle arities properly. Supports the
+  following signatures:
+    (get-phonemes) -- no weighting, default likelihood maps
+    (get-phonemes i) -- weight vowels +i
+    (get-phonemes m) -- alter vowel likelihood mapping by merging m
+    (get-phonemes i j) -- weight vowels +i, weight consonants +j
+    (get-phonemes i m) -- weight vowels +i, alter vowel likelihood mapping by
+      merging m
+    (get-phonemes m i) -- weight consonants +i, alter consonant likelihood
+      mapping by merging m
+    (get-phonemes i m j) -- weight vowels +i, weight consonants +j, adjust
+      vowel mapping by merging m
+    (get-phonemes i m j n) -- weight vowels +i, weight consonants +j, adjust
+      vowel mapping by merging m and consonant mapping by merging n
+  :return: map {:v [vector-of-vowels] :c [vector-of-consonants]}"
+  ([] (gen-phonemes 0 {} 0 {}))
   ([vowel-adjustment-or-map] (if (map? vowel-adjustment-or-map)
                               (gen-phonemes 0 0 vowel-adjustment-or-map {})
                               (gen-phonemes vowel-adjustment-or-map 0 {} {})))
-  ([vowel-adjustment-or-map consonant-adjustment-or-map]
-    (if (map? vowel-adjustment-or-map)
-      (if (map? consonant-adjustment-or-map)
-        (gen-phonemes 0 0 vowel-adjustment-or-map consonant-adjustment-or-map))
-      (gen-phonemes 0 consonant-adjustment-or-map vowel-adjustment-or-map {}))
-    (if (map? consonant-adjustment-or-map) (gen-phonemes vowel-adjustment-or-map
-                                            0 {} consonant-adjustment-or-map)
-          (gen-phonemes vowel-adjustment-or-map consonant-adjustment-or-map
-            {} {})))
-  ([vowel-adjustment consonant-adjustment vowel-map]
+  ([one two]
+    (cond
+      (and (map? one) (map? two))
+        (gen-phonemes 0 one 0 two)
+      (and (number? one) (map? two))
+        (gen-phonemes one two 0 {})
+      (and (map? one) (number? two))
+        (gen-phonemes 0 {} two one)
+      :else (gen-phonemes one {} two {})))
+  ([vowel-adjustment vowel-map consonant-adjustment]
     (gen-phonemes vowel-adjustment consonant-adjustment vowel-map {}))
-  ([vowel-adjustment consonant-adjustment vowel-map consonant-map]
-    (gen-phonemes vowel-adjustment consonant-adjustment vowel-map
+  ([vowel-adjustment vowel-map consonant-adjustment consonant-map]
+    (gen-phonemes vowel-adjustment consonant-adjustment vowel-map]
       consonant-map))
   ([& {:keys [vowel-adjustment
              consonant-adjustment
@@ -127,13 +157,52 @@
     consonant-likelihoods)))
 
 
-(defn get-maxes [phonemes] (let [v-count (count (:v phonemes))
+(defn- calculate-maxes
+  "Calculate the maximum number of possible distinct syllables of each type,
+  given the phonemic inventory.
+  :param phonemes: a phonemic inventory
+  :type phonemes: map
+  :return map (phonemes + :max-syllables map)"
+   [phonemes] (let [v-count (count (:v phonemes))
                                  c-count (count (:c phonemes))]
                             (assoc phonemes :max-syllables
                               {:v v-count
+                               :vc (* v-count c-count)
                                :cv (* v-count c-count)
                                :cvc (* v-count c-count v-count)
                                :cvv (* v-count v-count c-count)
                                :cvvc (* v-count v-count c-count c-count)})))
 
-(defn get-inventories [& args] (get-maxes (apply get-phonemes args)))
+(defn str-to-syll-type
+  "Convert a syllable string to a syllable type
+  :param string: a syllable
+  :type string: string
+  :return: keyword (:v/:cv/:cvc/:cvvc)"
+   [string] (let [v (set (into base-vowels extra-vowels))
+                                       elems (seq string)]
+                                  (keyword (apply str (for [elem elems]
+                                              (if (contains? v elem) \V) \C)))))
+
+(defn get-max
+  "List the maximum number of distinct syllables or check if there are any
+    possible syllables of a given type remaining. Supports the following
+    signatures:
+    (get-max) -- return max-syllables map
+    (get-max :s) -- return maximum number of syllables of type represented by :s
+    (get-max m :s) -- return true if morpheme-to-syllable mapping m contains
+      fewer syllables of type represented by :s than the maximum number, else
+      false
+    :return: map, int, or bool, depending on signature"
+  ([inventory] (:max-syllables inventory))
+  ([inventory syll-type] (syll-type (get-max inventory)))
+  ([inventory sylls syll-type] (let [max-count (get-max inventory syll-type)
+                                     syllables (filter #(= syll-type %)
+                                                (map str-to-syll-type sylls))]
+                                (<= (count syllables) max-count))))
+
+(defn get-inventories
+  "Generates phonemic inventory and calculates maximum syllable inventories.
+  Arguments are same as those passed to get-phonemes (q.v.)
+  :return: map {:v [vector-of-vowels] :c [vector-of-consonants]
+    :max-syllables {map-of-maximum-number-of-syllables}}"
+  [& args] (calculate-maxes (apply get-phonemes args)))

@@ -4,14 +4,14 @@
 
 (set! *assert* true)
 
-(def base-vowels [\a \i \u])
+(def ^:private base-vowels [\a \i \u])
 
-(def extra-vowels [\e \o \y \ə \ɪ \ɒ \ɑ \œ \ʏ \ɯ \ʉ \ɨ \ɵ \ɛ \ʊ \ɔ \æ \ɐ
+(def ^:private extra-vowels [\e \o \y \ə \ɪ \ɒ \ɑ \œ \ʏ \ɯ \ʉ \ɨ \ɵ \ɛ \ʊ \ɔ \æ \ɐ
                     \ɜ \ʌ \ø \ɤ])
 
-(def base-consonants [\p \t \k])
+(def ^:private base-consonants [\p \t \k])
 
-(def extra-consonants [\b \c \d \f \g \h \j \k \l \m \n \p \q \r \s \t \v \w
+(def ^:private extra-consonants [\b \c \d \f \g \h \j \k \l \m \n \p \q \r \s \t \v \w
                         \x \z \ʍ \ɹ \θ \ʃ \ð \ɸ \ɣ \ɥ \ɟ \ɬ \ʒ \χ \ç \ʋ \β
                         \ɲ \ʀ \ɢ \ʟ \ʙ \ɴ \ɽ \ʈ \ʂ \ʑ \ŋ \ɱ])
 

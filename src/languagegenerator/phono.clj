@@ -5,16 +5,19 @@
 
 (set! *assert* true)
 
-(def ^:private base-vowels [\a \i \u])
+(def ^:dynamic *max-root-length* 4)
 
-(def ^:private extra-vowels [\e \o \y \ə \ɪ \ɒ \ɑ \œ \ʏ \ɯ \ʉ \ɨ \ɵ \ɛ \ʊ \ɔ \æ \ɐ
-                    \ɜ \ʌ \ø \ɤ])
+(def ^:private vowels [\a \a \a \a \a \a \i \i \i \i \i \i \u \u \u \u \u \u
+                       \e \o \y \ə \ɪ \ɒ \ɑ \œ \ʏ \ɯ \ʉ \ɨ \ɵ \ɛ \ʊ \ɔ \æ \ɐ
+                       \ɜ \ʌ \ø \ɤ]
 
-(def ^:private base-consonants [\p \t \k])
-
-(def ^:private extra-consonants [\b \c \d \f \g \h \j \k \l \m \n \p \q \r \s \t \v \w
-                        \x \z \ʍ \ɹ \θ \ʃ \ð \ɸ \ɣ \ɥ \ɟ \ɬ \ʒ \χ \ç \ʋ \β
-                        \ɲ \ʀ \ɢ \ʟ \ʙ \ɴ \ɽ \ʈ \ʂ \ʑ \ŋ \ɱ])
+(def ^:private consonants [\p \p \p \p \p \p \p \p \p \p \p \p
+                           \t \t \t \t \t \t \t \t \t \t \t \t
+                           \k \k \k \k \k \k \k \k \k \k \k \k
+                           \b \c \d \f \g \h \j \k \l \m \n \p
+                           \q \r \s \t \v \w \x \z \ʍ \ɹ \θ \ʃ
+                           \ð \ɸ \ɣ \ɥ \ɟ \ɬ \ʒ \χ \ç \ʋ \β
+                           \ɲ \ʀ \ɢ \ʟ \ʙ \ɴ \ɽ \ʈ \ʂ \ʑ \ŋ \ɱ])
 
 (def ^:private vowel-map {1 5
                           2 5
@@ -35,29 +38,23 @@
                               9 10})
 
 
-
-
 (with-test
-  (defn- get-inventory [starting source max-size]
+  (defn- get-inventory [source max-size]
     (cond
-      (>= max-size (+ (count starting) (count source)))
+      (>= max-size (count (distinct source)))
       ; if max-size is greater than the total number of consonants available, return 'em all
-      (into starting source)
+      (vec (distinct source))
 
       (<= max-size 0)
       (throw (IllegalArgumentException. "max-size must be greater than 0"))
 
-      (< max-size (count starting))
-      ; if max-size is less than the number of base elements, take a random sample of the base elements
-      (vec (take max-size (shuffle starting)))
-
       :else
-      ; randomly add extra elements to the base, casting to a set to ensure uniqueness
+      ; randomly add extra elements, casting to a set to ensure uniqueness
       (let [source-size (inc (count source))]
-        (loop [inventory (set starting)]
+        (loop [inventory #{}]
           (if (>= (count inventory) max-size)
             (vec inventory) ; return a vector for access via rand-int
-            (recur (conj inventory (get-from 0 source))))))))
+            (recur (conj inventory (get-from source))))))))
 
   ; make sure calling it with max-size=3 returns the base inventories
   (is (= base-consonants (get-inventory base-consonants extra-consonants 3)))
@@ -104,10 +101,10 @@
           (or (nil? vs) (<= 100 (apply + vs))))
          (let [vs (vals consonant-likelihoods)]
           (or (nil? vs) (<= 100 (apply + vs))))]}
-    {:v (get-inventory base-vowels extra-vowels
+    {:v (get-inventory vowels
           (get-from vowel-adjustment (map-to-ranges
             (merge vowel-map vowel-likelihoods))))
-     :c (get-inventory base-consonants extra-consonants
+     :c (get-inventory consonants
           (get-from consonant-adjustment (map-to-ranges
             (merge vowel-map vowel-likelihoods))))})
 
@@ -149,7 +146,7 @@
                                   (strify (cartesian-product coll3 coll4)))))
  )
 
-(defn get-sylls [& args] (let [inventory (apply get-phonemes args)]
+(defn get-sylls [phonemes] (let [inventory @phonemes]
                              (ref {:v (map str (:v inventory))
                              :cv (cp (:c inventory) (:v inventory))
                              :vc (cp (:v inventory) (:c inventory))
@@ -159,6 +156,19 @@
                                    (:v inventory))
                              :cvvc (cp (:c inventory) (:v inventory)
                                     (:v inventory) (:c inventory))})))
+
+(defn gen-root
+  "Generate a random root comprised of randomly-selected consonants and vowels.
+  The algorithm is weighted to favor vowels over consonants 2:1, and there's a
+  safety valve in place to make sure the result is at least half vowels."
+  ([sylls max-length] (let [max-size (inc (rand-int max-length))
+                      syllables (apply concat (vals @sylls))]
+                    (loop [root-sylls []]
+                    (if (= (count root-sylls) max-size)
+                      (apply str (vec root-sylls))
+                      (recur (conj root-sylls (first (shuffle syllables))))
+                      ))))
+  ([sylls] (gen-root sylls *max-root-length*)))
 
 (defn assoc-syll
   ([morpheme syll-type syllables morpheme-inventory]

@@ -2,3 +2,4 @@ test/
 target/
 .lein-repl-history
 .nrepl-port
+pom.xml

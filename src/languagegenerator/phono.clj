@@ -56,27 +56,19 @@
             (vec inventory) ; return a vector for access via rand-int
             (recur (conj inventory (get-from source))))))))
 
-  ; make sure calling it with max-size=3 returns the base inventories
-  (is (= base-consonants (get-inventory base-consonants extra-consonants 3)))
-  (is (= base-vowels (get-inventory base-vowels extra-vowels 3)))
   ; make sure max-size<=0 throws the error
-  (is (thrown? IllegalArgumentException (get-inventory base-vowels extra-vowels 0)))
+  (is (thrown? IllegalArgumentException (get-inventory vowels 0)))
   ; make sure we're returning the right number of elements
-  (is (= 2 (count (get-inventory base-vowels extra-vowels 2))))
-  (is (= 10 (count (get-inventory base-consonants extra-consonants 10))))
-  (is (= 25 (count (get-inventory base-vowels extra-vowels 25))))
+  (is (= 2 (count (get-inventory vowels 2))))
+  (is (= 10 (count (get-inventory consonants 10))))
+  (is (= 25 (count (get-inventory vowels 25))))
   ; make sure we max out appropriately
-  (is (= 25 (count (get-inventory base-vowels extra-vowels 30))))
+  (is (= 25 (count (get-inventory vowels 30))))
   ; make sure we're pulling from the right places
-  (is (every? #(contains? (set (into base-vowels extra-vowels)) %)
-        (get-inventory base-vowels extra-vowels 10)))
-  (is (every? #(contains? (set (into base-consonants extra-consonants)) %)
-        (get-inventory base-vowels extra-vowels 10)))
-  ; make sure we're only pulling from the bases for max-size<3
-  (is (every? #(contains? (set base-vowels) %)
-        (get-inventory base-vowels extra-vowels 2)))
-  (is (every? #(contains? (set base-vowels) %)
-        (get-inventory base-consonants extra-consonants 2)))
+  (is (every? #(contains? (set (into vowels)) %)
+        (get-inventory vowels 10)))
+  (is (every? #(contains? (set (into consonants)) %)
+        (get-inventory consonants 10)))
   )
 
 (defn- gen-phonemes

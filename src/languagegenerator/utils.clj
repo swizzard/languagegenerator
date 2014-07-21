@@ -25,5 +25,5 @@
                                                 (get-from (range 100)))))
   (is (every? #(contains? (set (range 100)) %) (dotimes [_ 100]
                                               (get-from 10 (range 100)))))
-  (is (= (max 100 (get-from 100 (range 100)))))
+  (is (= 100 (get-from 100 (range 100))))
   )

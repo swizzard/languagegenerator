@@ -1,5 +1,5 @@
 (ns languagegenerator.phono
-  (:require [clojure.test :refer [with-test is]])
+  (:require [clojure.test :refer :all])
   (:require [languagegenerator.utils :refer [get-from map-to-ranges]])
   (:require [clojure.math.combinatorics :refer [cartesian-product]]))
 
@@ -9,7 +9,7 @@
 
 (def ^:private vowels [\a \a \a \a \a \a \i \i \i \i \i \i \u \u \u \u \u \u
                        \e \o \y \ə \ɪ \ɒ \ɑ \œ \ʏ \ɯ \ʉ \ɨ \ɵ \ɛ \ʊ \ɔ \æ \ɐ
-                       \ɜ \ʌ \ø \ɤ]
+                       \ɜ \ʌ \ø \ɤ])
 
 (def ^:private consonants [\p \p \p \p \p \p \p \p \p \p \p \p
                            \t \t \t \t \t \t \t \t \t \t \t \t
@@ -65,12 +65,13 @@
   ; make sure we max out appropriately
   (is (= 25 (count (get-inventory vowels 30))))
   ; make sure we're pulling from the right places
-  (is (every? #(contains? (set (into vowels)) %)
+  (is (every? #(contains? (set vowels) %)
         (get-inventory vowels 10)))
-  (is (every? #(contains? (set (into consonants)) %)
+  (is (every? #(contains? (set consonants) %)
         (get-inventory consonants 10)))
   )
 
+(with-test
 (defn- gen-phonemes
   "Generate vowel and consonant inventories. There's no real need to call this
   directly; get-phonemes is a wrapper around this function to handle multiple
@@ -99,6 +100,10 @@
      :c (get-inventory consonants
           (get-from consonant-adjustment (map-to-ranges
             (merge vowel-map vowel-likelihoods))))})
+(is (every? #(contains? (set vowels) %) (:v (gen-phonemes 0 {} 0 {}))))
+(is (every? #(contains? (set consonants) %) (:c (gen-phonemes 0 {} 0 {}))))
+)
+
 
 (defn get-phonemes
   "Wrapper around gen-phonemes to handle arities properly.
@@ -138,6 +143,7 @@
                                   (strify (cartesian-product coll3 coll4)))))
  )
 
+(with-test
 (defn get-sylls [phonemes] (let [inventory @phonemes]
                              (ref {:v (map str (:v inventory))
                              :cv (cp (:c inventory) (:v inventory))
@@ -148,7 +154,44 @@
                                    (:v inventory))
                              :cvvc (cp (:c inventory) (:v inventory)
                                     (:v inventory) (:c inventory))})))
+(is (every? #(= java.lang.String (type %) (:v (get-sylls (get-phonemes))))))
+(is (every? #(= java.lang.String (type %) (:cv (get-sylls (get-phonemes))))))
+(is (every? #(= java.lang.String (type %) (:vc (get-sylls (get-phonemes))))))
+(is (every? #(= java.lang.String (type %) (:cvc (get-sylls (get-phonemes))))))
+(is (every? #(= java.lang.String (type %) (:cvv (get-sylls (get-phonemes))))))
+(is (every? #(= java.lang.String (type %) (:cvvc (get-sylls (get-phonemes))))))
+(is (every? #(= 1 (count %) (:v (get-sylls (get-phonemes))))))
+(is (every? #(= 2 (count %) (:cv (get-sylls (get-phonemes))))))
+(is (every? #(= 2 (count %) (:vc (get-sylls (get-phonemes))))))
+(is (every? #(= 3 (count %) (:cvc (get-sylls (get-phonemes))))))
+(is (every? #(= 3 (count %) (:cvv (get-sylls (get-phonemes))))))
+(is (every? #(= 4 (count %) (:cvvc (get-sylls (get-phonemes))))))
+(is (every? #(contains? (set vowels) %) (:v (get-sylls (get-phonemes)))))
+(is (every? #(contains? (set consonants) %) (map first (:cv (get-sylls
+                                                          (get-phonemes))))))
+(is (every? #(contains? (set consonants) %) (map (fn [c] (get c 1)) (:cv (get-sylls
+                                                          (get-phonemes))))))
+(is (every? #(contains? (set vowels) %) (map first (:vc (get-sylls
+                                                          (get-phonemes))))))
+(is (every? #(contains? (set consonants) %) (map (fn [c] (get c 1)) (:vc (get-sylls
+                                                          (get-phonemes))))))
+(is (every? #(contains? (set consonants) %) (map first (:cvv (get-sylls
+                                                          (get-phonemes))))))
+(is (every? #(contains? (set vowels) %) (map (fn [c] (get c 1)) (:cvv (get-sylls
+                                                          (get-phonemes))))))
+(is (every? #(contains? (set vowels) %) (map (fn [c] (get c 2)) (:cvv (get-sylls
+                                                          (get-phonemes))))))
+(is (every? #(contains? (set consonants) %) (map first (:cvvc (get-sylls
+                                                          (get-phonemes))))))
+(is (every? #(contains? (set vowels) %) (map (fn [c] (get c 1)) (:cvvc (get-sylls
+                                                          (get-phonemes))))))
+(is (every? #(contains? (set vowels) %) (map (fn [c] (get c 2)) (:cvvc (get-sylls
+                                                          (get-phonemes))))))
+(is (every? #(contains? (set consonants) %) (map (fn [c] (get c 3)) (:cvvc (get-sylls
+                                                          (get-phonemes))))))
+)
 
+(with-test
 (defn gen-root
   "Generate a random root comprised of randomly-selected consonants and vowels.
   The algorithm is weighted to favor vowels over consonants 2:1, and there's a
@@ -161,6 +204,15 @@
                       (recur (conj root-sylls (first (shuffle syllables))))
                       ))))
   ([sylls] (gen-root sylls *max-root-length*)))
+(is (every? #(<= (* 4 *max-root-length*) (count %)) (repeatedly 10 (fn [] (gen-root
+                                                          (get-sylls
+                                                            (get-phonemes)))))))
+(is (every? #(<= (* 4 3) (count %)) (repeatedly 10 (fn [] (gen-root
+                                                      (get-sylls (get-phonemes))
+                                                            3)))))
+(is (= java.lang.String (type (gen-root (get-sylls (get-phonemes))))))
+(is (= java.lang.String (type (gen-root 5 (get-sylls (get-phonemes))))))
+)
 
 (defn assoc-syll
   ([morpheme syll-type syllables morpheme-inventory]
@@ -174,3 +226,17 @@
   ([morpheme syllables morpheme-inventory]
     (let [syll-type (first (first (sort-by #(count (next %)) @syllables)))]
       (assoc-syll morpheme syll-type syllables morpheme-inventory))))
+
+(deftest test-assoc-syll
+  (let [syllables (get-sylls (get-phonemes))
+        orig-sylls (ref @syllables)
+        morphemes (ref {})
+        counts {:v (count (:v @orig-sylls)) :cv (count (:cv @orig-sylls))
+                :vc (count (:vc @orig-sylls)) :cvv (count (:cvv @orig-sylls))
+                :cvvc (count (:cvvc @orig-sylls))}]
+    (assoc-syll :masc :cv syllables morphemes)
+    (assoc-syll :fem syllables morphemes)
+    (is (contains? (set (:cv @orig-sylls)) (:masc @morphemes)))
+    (is (contains? (set (:v @orig-sylls)) (:fem @morphemes)))
+    (is (= (dec (:v counts)) (count(:v @syllables))))
+    (is (= (dec (:cv counts)) (count (:cv @syllables))))))
